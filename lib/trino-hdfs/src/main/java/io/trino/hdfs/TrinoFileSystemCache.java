@@ -142,7 +142,9 @@ public class TrinoFileSystemCache
         catch (RuntimeException | IOException e) {
             stats.newGetCallFailed();
             throwIfInstanceOf(e, IOException.class);
-            throwIfInstanceOf(e.getCause(), IOException.class);
+            if (e.getCause() != null) {
+                throwIfInstanceOf(e.getCause(), IOException.class);
+            }
             throw e;
         }
 
