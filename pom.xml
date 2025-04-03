@@ -683,22 +683,6 @@
                         <artifactId>jmx-http-rpc</artifactId>
                     </exclusion>
                     <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-http</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-io</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-server</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.eclipse.jetty</groupId>
-                        <artifactId>jetty-util</artifactId>
-                    </exclusion>
-                    <exclusion>
                         <groupId>org.iq80.leveldb</groupId>
                         <artifactId>leveldb</artifactId>
                     </exclusion>
@@ -1889,18 +1873,6 @@
                 <groupId>org.codehaus.plexus</groupId>
                 <artifactId>plexus-xml</artifactId>
                 <version>4.0.2</version>
-            </dependency>
-
-            <dependency>
-                <groupId>org.eclipse.jetty.http2</groupId>
-                <artifactId>http2-common</artifactId>
-                <version>11.0.17</version>
-            </dependency>
-
-            <dependency>
-                <groupId>org.eclipse.jetty.http2</groupId>
-                <artifactId>http2-server</artifactId>
-                <version>11.0.17</version>
             </dependency>
 
             <dependency>
