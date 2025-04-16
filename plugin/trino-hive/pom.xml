@@ -560,6 +560,12 @@
             <artifactId>ssooidc</artifactId>
             <scope>test</scope>
         </dependency>
+      <dependency>
+        <groupId>com.google.apis</groupId>
+        <artifactId>google-api-services-bigquery</artifactId>
+        <version>v2-rev20250313-2.0.0</version>
+        <scope>compile</scope>
+      </dependency>
     </dependencies>
 
     <build>

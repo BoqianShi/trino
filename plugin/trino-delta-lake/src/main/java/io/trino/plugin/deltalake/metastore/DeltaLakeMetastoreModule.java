@@ -31,6 +31,7 @@ public class DeltaLakeMetastoreModule
             case THRIFT -> new DeltaLakeThriftMetastoreModule();
             case FILE -> new DeltaLakeFileMetastoreModule();
             case GLUE -> new DeltaLakeGlueMetastoreModule();
+            case BIGQUERY -> null;
         });
 
         install(new CachingHiveMetastoreModule());

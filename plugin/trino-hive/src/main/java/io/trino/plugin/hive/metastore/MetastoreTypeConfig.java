@@ -25,6 +25,7 @@ public class MetastoreTypeConfig
         THRIFT,
         FILE,
         GLUE,
+        BIGQUERY,
     }
 
     private MetastoreType metastoreType = THRIFT;
