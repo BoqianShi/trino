@@ -77,7 +77,7 @@ public class PageProcessor
         this.projections = projections.stream()
                 .map(projection -> {
                     if (projection.getInputChannels().size() == 1 && projection.isDeterministic()) {
-                        return new DictionaryAwarePageProjection(projection, dictionarySourceIdFunction, projection instanceof InputPageProjection);
+                        return new DictionaryAwarePageProjection(projection, dictionarySourceIdFunction);
                     }
                     return projection;
                 })
@@ -260,6 +260,9 @@ public class PageProcessor
 
         private void updateRetainedSize()
         {
+            // TODO: This is an estimate without knowing anything about the SourcePage implementation details. SourcePage
+            // should expose this information directly
+            retainedSizeInBytes = Page.getInstanceSizeInBytes(page.getChannelCount());
             // increment the size only when it is the first reference
             ReferenceCountMap referenceCountMap = new ReferenceCountMap();
             page.retainedBytesForEachPart((object, size) -> {
@@ -318,7 +321,6 @@ public class PageProcessor
                     blocks[i] = previouslyComputedResults[i];
                 }
 
-                blocks[i] = blocks[i].getLoadedBlock();
                 pageSize += blocks[i].getSizeInBytes();
             }
             return ProcessBatchResult.processBatchSuccess(new Page(positionsBatch.size(), blocks));
