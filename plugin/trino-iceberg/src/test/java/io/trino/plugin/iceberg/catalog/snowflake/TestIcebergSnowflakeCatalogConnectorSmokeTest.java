@@ -122,6 +122,34 @@ public class TestIcebergSnowflakeCatalogConnectorSmokeTest
     }
 
     @Override
+    protected void createSchema(String schemaName)
+            throws SQLException
+    {
+        server.execute(schemaName, "CREATE SCHEMA " + schemaName);
+    }
+
+    @Override
+    protected void dropSchema(String schema)
+            throws SQLException
+    {
+        server.execute(schema, "DROP SCHEMA " + schema);
+    }
+
+    @Override
+    protected AutoCloseable createTable(String schema, String tableName, String tableDefinition)
+            throws SQLException
+    {
+        server.execute(schema,
+                """
+                CREATE OR REPLACE ICEBERG TABLE %s %s
+                 EXTERNAL_VOLUME = '%s'
+                 CATALOG = 'SNOWFLAKE'
+                 BASE_LOCATION = '%s/'
+                """.formatted(tableName, tableDefinition, SNOWFLAKE_S3_EXTERNAL_VOLUME, tableName));
+        return () -> server.execute(schema, "DROP TABLE %s".formatted(tableName));
+    }
+
+    @Override
     protected boolean hasBehavior(TestingConnectorBehavior connectorBehavior)
     {
         return switch (connectorBehavior) {
@@ -226,6 +254,14 @@ public class TestIcebergSnowflakeCatalogConnectorSmokeTest
     public void testHiddenPathColumn()
     {
         assertThatThrownBy(super::testHiddenPathColumn)
+                .hasMessageContaining("Snowflake managed Iceberg tables do not support modifications");
+    }
+
+    @Test
+    @Override
+    public void testDeleteWithV3Format()
+    {
+        assertThatThrownBy(super::testDeleteWithV3Format)
                 .hasMessageContaining("Snowflake managed Iceberg tables do not support modifications");
     }
 

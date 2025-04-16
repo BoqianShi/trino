@@ -349,6 +349,7 @@ public class IcebergPageSourceProvider
         if (!deletes.isEmpty()) {
             Supplier<Optional<RowPredicate>> deletePredicate = memoize(() -> getDeleteManager(partitionSpec, partitionData)
                     .getDeletePredicate(
+                            fileSystem,
                             path,
                             dataSequenceNumber,
                             deletes,
@@ -746,8 +747,8 @@ public class IcebergPageSourceProvider
                     }
                 }
             }
-            if (e instanceof TrinoException) {
-                throw (TrinoException) e;
+            if (e instanceof TrinoException trinoException) {
+                throw trinoException;
             }
             if (e instanceof OrcCorruptionException) {
                 throw new TrinoException(ICEBERG_BAD_DATA, e);
@@ -786,16 +787,16 @@ public class IcebergPageSourceProvider
 
     private static Type getOrcReadType(Type columnType, TypeManager typeManager)
     {
-        if (columnType instanceof ArrayType) {
-            return new ArrayType(getOrcReadType(((ArrayType) columnType).getElementType(), typeManager));
+        if (columnType instanceof ArrayType arrayType) {
+            return new ArrayType(getOrcReadType(arrayType.getElementType(), typeManager));
         }
         if (columnType instanceof MapType mapType) {
             Type keyType = getOrcReadType(mapType.getKeyType(), typeManager);
             Type valueType = getOrcReadType(mapType.getValueType(), typeManager);
             return new MapType(keyType, valueType, typeManager.getTypeOperators());
         }
-        if (columnType instanceof RowType) {
-            return RowType.from(((RowType) columnType).getFields().stream()
+        if (columnType instanceof RowType rowType) {
+            return RowType.from(rowType.getFields().stream()
                     .map(field -> new RowType.Field(field.getName(), getOrcReadType(field.getType(), typeManager)))
                     .collect(toImmutableList()));
         }
@@ -1037,8 +1038,8 @@ public class IcebergPageSourceProvider
                     e.addSuppressed(ex);
                 }
             }
-            if (e instanceof TrinoException) {
-                throw (TrinoException) e;
+            if (e instanceof TrinoException trinoException) {
+                throw trinoException;
             }
             if (e instanceof ParquetCorruptionException) {
                 throw new TrinoException(ICEBERG_BAD_DATA, e);
@@ -1390,8 +1391,8 @@ public class IcebergPageSourceProvider
 
     private static TrinoException handleException(OrcDataSourceId dataSourceId, Exception exception)
     {
-        if (exception instanceof TrinoException) {
-            return (TrinoException) exception;
+        if (exception instanceof TrinoException trinoException) {
+            return trinoException;
         }
         if (exception instanceof OrcCorruptionException) {
             return new TrinoException(ICEBERG_BAD_DATA, exception);
@@ -1401,8 +1402,8 @@ public class IcebergPageSourceProvider
 
     private static TrinoException handleException(ParquetDataSourceId dataSourceId, Exception exception)
     {
-        if (exception instanceof TrinoException) {
-            return (TrinoException) exception;
+        if (exception instanceof TrinoException trinoException) {
+            return trinoException;
         }
         if (exception instanceof ParquetCorruptionException) {
             return new TrinoException(ICEBERG_BAD_DATA, exception);

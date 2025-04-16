@@ -294,8 +294,8 @@ public class ParquetPageSourceFactory
             }
             catch (IOException _) {
             }
-            if (e instanceof TrinoException) {
-                throw (TrinoException) e;
+            if (e instanceof TrinoException trinoException) {
+                throw trinoException;
             }
             if (e instanceof ParquetCorruptionException) {
                 throw new TrinoException(HIVE_BAD_DATA, e);
@@ -486,7 +486,7 @@ public class ParquetPageSourceFactory
             HiveColumnHandle baseColumn = column.getBaseColumn();
             Optional<org.apache.parquet.schema.Type> parquetType = getBaseColumnParquetType(baseColumn, fileSchema, useColumnNames);
             if (parquetType.isEmpty()) {
-                transforms.constantValue(column.getBaseType().createNullBlock());
+                transforms.constantValue(column.getType().createNullBlock());
                 continue;
             }
             String baseColumnName = useColumnNames ? baseColumn.getBaseColumnName() : fileSchema.getFields().get(baseColumn.getBaseHiveColumnIndex()).getName();

@@ -175,9 +175,6 @@ public class ParquetWriter
 
         checkArgument(page.getChannelCount() == columnWriters.size());
 
-        // page should already be loaded, but double check
-        page = page.getLoadedPage();
-
         Page validationPage = page;
         recordValidation(validation -> validation.addPage(validationPage));
 
@@ -250,8 +247,8 @@ public class ParquetWriter
             }
         }
         catch (IOException e) {
-            if (e instanceof ParquetCorruptionException) {
-                throw (ParquetCorruptionException) e;
+            if (e instanceof ParquetCorruptionException pce) {
+                throw pce;
             }
             throw new ParquetCorruptionException(input.getId(), "Validation failed with exception %s", e);
         }
