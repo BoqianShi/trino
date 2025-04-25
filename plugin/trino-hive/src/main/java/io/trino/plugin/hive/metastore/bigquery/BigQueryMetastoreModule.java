@@ -50,6 +50,7 @@ public final class BigQueryMetastoreModule
     @Override
     protected void setup(Binder binder)
     {
+        // Bind the configuration
         configBinder(binder).bindConfig(BigQueryMetastoreConfig.class);
 
         // Bind the core BigQuery Metastore implementation and its factory

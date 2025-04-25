@@ -36,7 +36,7 @@ public class DeltaLakeMetastoreModule
         bindMetastoreModule("thrift", new DeltaLakeThriftMetastoreModule());
         bindMetastoreModule("file", new DeltaLakeFileMetastoreModule());
         bindMetastoreModule("glue", new DeltaLakeGlueMetastoreModule());
-        bindMetastoreModule("bigquery", null);
+        bindMetastoreModule("bigquery", new DeltaLakeBigQueryMetastoreModule());
 
         install(new DecoratedHiveMetastoreModule(false));
     }
