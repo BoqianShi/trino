@@ -16,36 +16,21 @@ package io.trino.plugin.hive.metastore.bigquery;
 import io.airlift.configuration.Config;
 import io.airlift.configuration.ConfigDescription;
 import io.airlift.configuration.ConfigSecuritySensitive;
-import io.airlift.units.Duration;
-import jakarta.validation.constraints.Min;
 
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 
-// @DefunctConfig({...}) // Add if replacing older configs from a previous BQ implementation
 public class BigQueryMetastoreConfig
 {
-    // --- GCP Project & Location ---
     private Optional<String> projectId = Optional.empty();
     private Optional<String> location = Optional.empty(); // e.g., "US", "EU", "us-west1"
 
-    // --- GCP Authentication ---
     private Optional<String> credentialsKeyPath = Optional.empty();
     private Optional<String> credentialsKeyJson = Optional.empty();
-    private Optional<String> impersonatedServiceAccount = Optional.empty();
 
-    // --- API Endpoint ---
-    private Optional<String> bigqueryEndpointUrl = Optional.empty();
-
-    // --- Client Tuning ---
-    // Note: Retries are often handled by the google-http-java-client automatically.
-    // Explicit max retries might require custom interceptors if needed beyond defaults.
-    private Duration connectTimeout = new Duration(20, TimeUnit.SECONDS);
-    private Duration readTimeout = new Duration(60, TimeUnit.SECONDS);
-    private int threads = 40; // For parallel operations *within* the metastore implementation logic
-
-    // --- Hive/Metastore Generic ---
     private Optional<String> defaultWarehouseDir = Optional.empty(); // Useful reference for external tables
+
+    private int bqClientConnectTimeoutMs = 60_000; // Default 60 seconds
+    private int bqClientReadTimeoutMs = 60_000;    // Default 60 seconds
 
     // --- Getters and Setters ---
 
@@ -55,7 +40,7 @@ public class BigQueryMetastoreConfig
     }
 
     @Config("hive.metastore.bigquery.project-id")
-    @ConfigDescription("GCP project ID for BigQuery metastore operations. Auto-detected if running on GCP.")
+    @ConfigDescription("GCP project ID for BigQuery metastore operations.")
     public BigQueryMetastoreConfig setProjectId(String projectId)
     {
         this.projectId = Optional.ofNullable(projectId);
@@ -102,83 +87,42 @@ public class BigQueryMetastoreConfig
         return this;
     }
 
-    public Optional<String> getImpersonatedServiceAccount()
-    {
-        return impersonatedServiceAccount;
-    }
-
-    @Config("hive.metastore.bigquery.impersonate-service-account")
-    @ConfigDescription("Email of Google Cloud service account to impersonate for BigQuery access.")
-    public BigQueryMetastoreConfig setImpersonatedServiceAccount(
-            String impersonatedServiceAccount)
-    {
-        this.impersonatedServiceAccount = Optional.ofNullable(impersonatedServiceAccount);
-        return this;
-    }
-
-    public Optional<String> getBigqueryEndpointUrl()
-    {
-        return bigqueryEndpointUrl;
-    }
-
-    @Config("hive.metastore.bigquery.endpoint-url")
-    @ConfigDescription("Custom endpoint URL for the BigQuery API.")
-    public BigQueryMetastoreConfig setBigqueryEndpointUrl(String bigqueryEndpointUrl)
-    {
-        this.bigqueryEndpointUrl = Optional.ofNullable(bigqueryEndpointUrl);
-        return this;
-    }
-
-    public Duration getConnectTimeout()
-    {
-        return connectTimeout;
-    }
-
-    @Config("hive.metastore.bigquery.connect-timeout")
-    @ConfigDescription("Connect timeout duration for BigQuery API calls.")
-    public BigQueryMetastoreConfig setConnectTimeout(Duration connectTimeout)
-    {
-        this.connectTimeout = connectTimeout;
-        return this;
-    }
-
-    public Duration getReadTimeout()
-    {
-        return readTimeout;
-    }
-
-    @Config("hive.metastore.bigquery.read-timeout")
-    @ConfigDescription("Read timeout duration for BigQuery API calls.")
-    public BigQueryMetastoreConfig setReadTimeout(Duration readTimeout)
-    {
-        this.readTimeout = readTimeout;
-        return this;
-    }
-
-    @Min(1)
-    public int getThreads()
-    {
-        return threads;
-    }
-
-    @Config("hive.metastore.bigquery.threads")
-    @ConfigDescription("Number of threads for parallel internal metastore operations (e.g., fetching multiple tables).")
-    public BigQueryMetastoreConfig setThreads(int threads)
-    {
-        this.threads = threads;
-        return this;
-    }
-
     public Optional<String> getDefaultWarehouseDir()
     {
         return defaultWarehouseDir;
     }
 
     @Config("hive.metastore.bigquery.default-warehouse-dir")
-    @ConfigDescription("Optional base directory path used as reference for external table locations.")
+    @ConfigDescription("Default warehouse directory for BigQuery-related operations, potentially for GCS paths if creating external tables referencing GCS.")
     public BigQueryMetastoreConfig setDefaultWarehouseDir(String defaultWarehouseDir)
     {
         this.defaultWarehouseDir = Optional.ofNullable(defaultWarehouseDir);
+        return this;
+    }
+
+    public int getBqClientConnectTimeoutMs()
+    {
+        return bqClientConnectTimeoutMs;
+    }
+
+    @Config("hive.metastore.bigquery.client.connect-timeout-ms")
+    @ConfigDescription("Timeout in milliseconds for connecting to BigQuery service.")
+    public BigQueryMetastoreConfig setBqClientConnectTimeoutMs(int bqClientConnectTimeoutMs)
+    {
+        this.bqClientConnectTimeoutMs = bqClientConnectTimeoutMs;
+        return this;
+    }
+
+    public int getBqClientReadTimeoutMs()
+    {
+        return bqClientReadTimeoutMs;
+    }
+
+    @Config("hive.metastore.bigquery.client.read-timeout-ms")
+    @ConfigDescription("Timeout in milliseconds for reading from BigQuery service.")
+    public BigQueryMetastoreConfig setBqClientReadTimeoutMs(int bqClientReadTimeoutMs)
+    {
+        this.bqClientReadTimeoutMs = bqClientReadTimeoutMs;
         return this;
     }
 }

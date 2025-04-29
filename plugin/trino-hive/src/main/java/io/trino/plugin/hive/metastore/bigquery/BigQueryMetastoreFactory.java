@@ -29,7 +29,6 @@ public class BigQueryMetastoreFactory
 {
     private final BigQueryMetastore metastore;
 
-    // Glue metastore does not support impersonation, so just use single shared instance
     @Inject
     public BigQueryMetastoreFactory(BigQueryMetastore metastore)
     {

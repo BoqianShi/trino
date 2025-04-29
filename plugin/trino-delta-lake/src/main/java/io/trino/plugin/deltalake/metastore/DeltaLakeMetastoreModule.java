@@ -23,6 +23,7 @@ import io.trino.plugin.deltalake.metastore.thrift.DeltaLakeThriftMetastoreModule
 import io.trino.plugin.hive.HideDeltaLakeTables;
 import io.trino.plugin.hive.metastore.DecoratedHiveMetastoreModule;
 import io.trino.plugin.hive.metastore.MetastoreTypeConfig;
+import io.trino.plugin.hive.metastore.bigquery.DeltaLakeBigQueryMetastoreModule;
 
 import static io.airlift.configuration.ConditionalModule.conditionalModule;
 
