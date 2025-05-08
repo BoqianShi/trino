@@ -32,6 +32,7 @@ import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.services.bigquery.Bigquery;
 import com.google.api.services.bigquery.BigqueryScopes;
 import com.google.api.services.bigquery.model.DatasetList;
 import com.google.api.services.bigquery.model.TableList;
@@ -39,6 +40,7 @@ import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.inject.Inject;
 import io.trino.hive.thrift.metastore.DataOperationType;
 import io.trino.plugin.hive.HiveColumnStatisticType;
 import io.trino.plugin.hive.HivePartition;
@@ -62,7 +64,6 @@ import io.trino.spi.function.LanguageFunction;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.security.RoleGrant;
 import io.trino.spi.type.Type;
-import jakarta.inject.Inject;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
@@ -84,7 +85,7 @@ import static java.util.Objects.requireNonNull;
 public class BigQueryMetastore
         implements HiveMetastore
 {
-    private final com.google.api.services.bigquery.Bigquery bigQueryClient;
+    private final Bigquery bigQueryClient;
     private final String projectId;
     private final String defaultLocation;
     private final Optional<String> defaultWarehouseDir;
@@ -148,7 +149,7 @@ public class BigQueryMetastore
         try {
             com.google.api.services.bigquery.model.Dataset bqDataset =
                     bigQueryClient.datasets().get(projectId, databaseName).execute();
-            return Optional.of(BigQueryMetastoreUtils.bigQueryApiDatasetToHiveDatabase(bqDataset));
+            return Optional.of(BigQueryMetastoreUtils.bigQueryDatasetToHiveDatabase(bqDataset));
         }
         catch (GoogleJsonResponseException e) {
             if (e.getStatusCode() == 404) {
@@ -194,7 +195,7 @@ public class BigQueryMetastore
     {
         try {
             com.google.api.services.bigquery.model.Dataset bqDataset =
-                    BigQueryMetastoreUtils.hiveDatabaseToBigQueryApiModelDataset(database, projectId, defaultLocation);
+                    BigQueryMetastoreUtils.hiveDatabaseToBigQueryModelDataset(database, projectId, defaultLocation);
             bigQueryClient.datasets().insert(projectId, bqDataset).execute();
         }
         catch (GoogleJsonResponseException e) {
@@ -230,21 +231,22 @@ public class BigQueryMetastore
     @Override
     public Optional<Table> getTable(String databaseName, String tableName)
     {
-//        try {
-//            com.google.api.services.bigquery.model.Table bqApiTable =
-//                    bigQueryClient.tables().get(projectId, databaseName, tableName).execute();
-//            return Optional.of(BigQueryMetastoreUtils.bigQueryApiTableToHiveTable(bqApiTable, projectId));
-//        }
-//        catch (GoogleJsonResponseException e) {
-//            if (e.getStatusCode() == 404) { // Not Found
-//                return Optional.empty();
-//            }
-//            throw new TrinoException(HIVE_METASTORE_ERROR, "Failed to get BigQuery table: " + databaseName + "." + tableName + " - " + e.getDetails().getMessage(), e);
-//        }
-//        catch (IOException e) {
-//            throw new TrinoException(HIVE_METASTORE_ERROR, "Failed to get BigQuery table (IO): " + databaseName + "." + tableName, e);
-//        }
-        return Optional.empty();
+        try {
+            com.google.api.services.bigquery.model.Table bqTable =
+                    bigQueryClient.tables().get(projectId, databaseName, tableName).execute();
+            Optional<Table> hiveTable = Optional.of(BigQueryMetastoreUtils.bigQueryTableToHiveTable(bqTable, projectId));
+
+            return hiveTable;
+        }
+        catch (GoogleJsonResponseException e) {
+            if (e.getStatusCode() == 404) { // Not Found
+                return Optional.empty();
+            }
+            throw new TrinoException(HIVE_METASTORE_ERROR, "Failed to get BigQuery table: " + databaseName + "." + tableName + " - " + e.getDetails().getMessage(), e);
+        }
+        catch (IOException e) {
+            throw new TrinoException(HIVE_METASTORE_ERROR, "Failed to get BigQuery table (IO): " + databaseName + "." + tableName, e);
+        }
     }
 
     @Override
@@ -296,9 +298,9 @@ public class BigQueryMetastore
 //            throw new TrinoException(HIVE_METASTORE_ERROR, "Creating Hive-style partitioned tables in BigQuery is not supported by this metastore.");
 //        }
 //        try {
-//            com.google.api.services.bigquery.model.Table bqApiTable =
-//                    BigQueryMetastoreUtils.hiveTableToBigQueryApiTable(table, projectId);
-//            bigQueryClient.tables().insert(projectId, table.getDatabaseName(), bqApiTable).execute();
+//            com.google.api.services.bigquery.model.Table bqTable =
+//                    BigQueryMetastoreUtils.hiveTableToBigQueryTable(table, projectId);
+//            bigQueryClient.tables().insert(projectId, table.getDatabaseName(), bqTable).execute();
 //        }
 //        catch (GoogleJsonResponseException e) {
 //            if (e.getStatusCode() == 409) {

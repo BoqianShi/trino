@@ -26,28 +26,59 @@
  */
 package io.trino.plugin.hive.metastore.bigquery;
 
+import com.google.api.services.bigquery.model.Clustering;
+import com.google.api.services.bigquery.model.CsvOptions;
+import com.google.api.services.bigquery.model.Dataset;
 import com.google.api.services.bigquery.model.DatasetReference;
+import com.google.api.services.bigquery.model.ExternalDataConfiguration;
+import com.google.api.services.bigquery.model.TableFieldSchema;
+import com.google.api.services.bigquery.model.TableReference;
+import com.google.api.services.bigquery.model.TableSchema;
+import com.google.api.services.bigquery.model.TimePartitioning;
+import com.google.api.services.bigquery.model.ViewDefinition;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.trino.plugin.hive.HiveType;
+import io.trino.plugin.hive.metastore.Column;
 import io.trino.plugin.hive.metastore.Database;
+import io.trino.plugin.hive.metastore.Storage;
+import io.trino.plugin.hive.metastore.StorageFormat;
+import io.trino.plugin.hive.metastore.Table;
+import io.trino.plugin.hive.type.Category;
+import io.trino.plugin.hive.type.TypeInfo;
 import io.trino.spi.security.PrincipalType;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
+
+import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
+import static io.trino.plugin.hive.TableType.VIRTUAL_VIEW;
 
 public final class BigQueryMetastoreUtils
 {
-    // Constants previously in BigQueryMetastore
+    // Constants (Unchanged)
     static final String BIGQUERY_TABLE_FLAG = "bigquery_table";
     static final String BIGQUERY_TABLE_TYPE_PARAMETER = "bigquery_table_type";
     static final String BIGQUERY_TIME_PARTITIONING_FIELD = "bigquery_time_partitioning_field";
     static final String BIGQUERY_TIME_PARTITIONING_TYPE = "bigquery_time_partitioning_type";
     static final String BIGQUERY_CLUSTERING_FIELDS = "bigquery_clustering_fields";
+    static final String CSV_SKIP_HEADER_LINE_COUNT = "skip.header.line.count";
+    static final String EXTERNAL_DATA_FORMAT = "external_data_format";
+    static final String EXTERNAL_DATA_COMPRESSION = "external_data_compression";
+    private static final String FIELD_DELIM = "field.delim";
+    private static final String SERIALIZATION_FORMAT = "serialization.format";
+    private static final String ESCAPE_CHAR = "escape.delim";
+    private static final String QUOTE_CHAR = "quote.delim";
+    private static final String SERIALIZATION_ENCODING = "serialization.encoding";
 
-    private BigQueryMetastoreUtils()
-    {
-        throw new AssertionError("This is a utility class and cannot be instantiated");
-    }
+    private BigQueryMetastoreUtils() {}
 
-    static Database bigQueryApiDatasetToHiveDatabase(com.google.api.services.bigquery.model.Dataset bqDataset)
+    // --- Dataset Conversion (Unchanged) ---
+    static Database bigQueryDatasetToHiveDatabase(Dataset bqDataset)
     {
         if (bqDataset == null) {
             throw new IllegalArgumentException("Input BigQuery Dataset cannot be null");
@@ -55,255 +86,351 @@ public final class BigQueryMetastoreUtils
         if (bqDataset.getDatasetReference() == null || bqDataset.getDatasetReference().getDatasetId() == null) {
             throw new IllegalArgumentException("BigQuery Dataset must have a valid DatasetReference with a DatasetId");
         }
-
         return Database.builder()
                 .setDatabaseName(bqDataset.getDatasetReference().getDatasetId())
                 .setLocation(Optional.ofNullable(bqDataset.getLocation()))
                 .setComment(Optional.ofNullable(bqDataset.getDescription()))
-                .setOwnerName(Optional.of("public")) // Placeholder since BigQuery use IAM to manage ownership
-                .setOwnerType(Optional.of(PrincipalType.USER)) // Defaulting
+                .setOwnerName(Optional.of("public"))  // Placeholder since BigQuery use IAM to manage ownership
+                .setOwnerType(Optional.of(PrincipalType.USER))
                 .setParameters(bqDataset.getLabels() == null ? ImmutableMap.of() : ImmutableMap.copyOf(bqDataset.getLabels()))
                 .build();
     }
 
-    static com.google.api.services.bigquery.model.Dataset hiveDatabaseToBigQueryApiModelDataset(
-            Database hiveDatabase,
-            String projectId,
-            String defaultLocation)
+    static Dataset hiveDatabaseToBigQueryModelDataset(Database hiveDatabase, String projectId, String defaultLocation)
     {
-        com.google.api.services.bigquery.model.Dataset bqDataset = new com.google.api.services.bigquery.model.Dataset();
+        Dataset bqDataset = new Dataset();
         bqDataset.setDatasetReference(new DatasetReference()
                 .setProjectId(projectId)
                 .setDatasetId(hiveDatabase.getDatabaseName()));
         bqDataset.setLocation(hiveDatabase.getLocation().orElse(defaultLocation));
         hiveDatabase.getComment().ifPresent(bqDataset::setDescription);
         if (hiveDatabase.getParameters() != null && !hiveDatabase.getParameters().isEmpty()) {
-            // Filter out any parameters that are not suitable as BQ labels if necessary
             bqDataset.setLabels(ImmutableMap.copyOf(hiveDatabase.getParameters()));
         }
         return bqDataset;
     }
-//
-//    static Table bigQueryApiTableToHiveTable(com.google.api.services.bigquery.model.Table bqApiTable, String projectIdForTableRef)
-//    {
-//        TableReference bqTableRef = bqApiTable.getTableReference();
-//        if (bqTableRef == null) {
-//            throw new IllegalArgumentException("BigQuery API Table must have a TableReference");
-//        }
-//        // Ensure projectId is populated in the reference for constructing URI, if not already there from API response
-//        String actualProjectId = bqTableRef.getProjectId() != null ? bqTableRef.getProjectId() : projectIdForTableRef;
-//
-//        TableSchema bqSchema = bqApiTable.getSchema();
-//
-//        List<Column> dataColumns = new ArrayList<>();
-//        if (bqSchema != null && bqSchema.getFields() != null) {
-//            for (TableFieldSchema field : bqSchema.getFields()) {
-//                dataColumns.add(bigQueryFieldSchemaToHiveColumn(field));
-//            }
-//        }
-//
-//        ImmutableMap.Builder<String, String> parameters = ImmutableMap.builder();
-//        parameters.put(BIGQUERY_TABLE_FLAG, "true");
-//        Optional.ofNullable(bqApiTable.getDescription()).ifPresent(comment -> parameters.put("comment", comment));
-//        if (bqApiTable.getType() != null) {
-//            parameters.put(BIGQUERY_TABLE_TYPE_PARAMETER, bqApiTable.getType());
-//        }
-//
-//
-//        TimePartitioning timePartitioning = bqApiTable.getTimePartitioning();
-//        if (timePartitioning != null) {
-//            Optional.ofNullable(timePartitioning.getField()).ifPresent(field -> parameters.put(BIGQUERY_TIME_PARTITIONING_FIELD, field));
-//            Optional.ofNullable(timePartitioning.getType()).ifPresent(type -> parameters.put(BIGQUERY_TIME_PARTITIONING_TYPE, type));
-//        }
-//        Clustering clustering = bqApiTable.getClustering();
-//        if (clustering != null && clustering.getFields() != null && !clustering.getFields().isEmpty()) {
-//            parameters.put(BIGQUERY_CLUSTERING_FIELDS, String.join(",", clustering.getFields()));
-//        }
-//
-//        StorageDescriptor sd = StorageDescriptor.builder()
-//                .setColumns(dataColumns)
-//                .setLocation(Optional.of("bq://" + actualProjectId + "/" + bqTableRef.getDatasetId() + "/" + bqTableRef.getTableId()))
-//                .setInputFormat(Optional.empty())
-//                .setOutputFormat(Optional.empty())
-//                .setSerdeInfo(Optional.empty())
-//                .setParameters(parameters.build())
-//                .build();
-//
-//        Table.Builder tableBuilder = Table.builder()
-//                .setDatabaseName(bqTableRef.getDatasetId())
-//                .setTableName(bqTableRef.getTableId())
-//                .setOwner(Optional.empty()) // BigQuery IAM model
-//                .setTableType(mapBigQueryApiTableTypeToHiveTableType(bqApiTable.getType()))
-//                .setDataColumns(dataColumns)
-//                .setPartitionColumns(ImmutableList.of())
-//                .setParameters(parameters.build())
-//                .setStorageDescriptor(sd);
-//
-//        if ("VIEW".equals(bqApiTable.getType()) && bqApiTable.getView() != null) {
-//            tableBuilder.setViewOriginalText(Optional.ofNullable(bqApiTable.getView().getQuery()));
-//            tableBuilder.setViewExpandedText(Optional.ofNullable(bqApiTable.getView().getQuery()));
-//        }
-//        // TODO: Handle EXTERNAL table properties if bqApiTable.getExternalDataConfiguration() is present
-//
-//        return tableBuilder.build();
-//    }
-//
-//    static com.google.api.services.bigquery.model.Table hiveTableToBigQueryApiTable(Table hiveTable, String projectId)
-//    {
-//        com.google.api.services.bigquery.model.Table bqApiTable = new com.google.api.services.bigquery.model.Table();
-//        bqApiTable.setTableReference(new TableReference()
-//                .setProjectId(projectId)
-//                .setDatasetId(hiveTable.getDatabaseName())
-//                .setTableId(hiveTable.getTableName()));
-//
-//        List<TableFieldSchema> bqFields = hiveTable.getDataColumns().stream()
-//                .map(BigQueryMetastoreUtils::hiveColumnToBigQueryFieldSchema)
-//                .collect(Collectors.toList());
-//        bqApiTable.setSchema(new TableSchema().setFields(bqFields));
-//
-//        hiveTable.getComment().ifPresent(bqApiTable::setDescription);
-//
-//        Map<String, String> labels = hiveTable.getParameters().entrySet().stream()
-//                .filter(entry -> !entry.getKey().startsWith("bigquery_") && !entry.getKey().equals("comment") && !entry.getKey().equals("EXTERNAL"))
-//                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-//        if (!labels.isEmpty()) {
-//            bqApiTable.setLabels(labels);
-//        }
-//
-//        if (VIRTUAL_VIEW.name().equals(hiveTable.getTableType())) {
-//            String viewSql = hiveTable.getViewOriginalText()
-//                    .orElseThrow(() -> new IllegalArgumentException("View SQL (viewOriginalText) is required for creating a BigQuery view"));
-//            bqApiTable.setView(new ViewDefinition().setQuery(viewSql));
-//        }
-//        else { // Assume TABLE for MANAGED_TABLE, EXTERNAL_TABLE (for now, external needs more)
-//            Map<String, String> params = hiveTable.getParameters();
-//            if (params.containsKey(BIGQUERY_TIME_PARTITIONING_FIELD) && params.containsKey(BIGQUERY_TIME_PARTITIONING_TYPE)) {
-//                bqApiTable.setTimePartitioning(new TimePartitioning()
-//                        .setField(params.get(BIGQUERY_TIME_PARTITIONING_FIELD))
-//                        .setType(params.get(BIGQUERY_TIME_PARTITIONING_TYPE)));
-//            }
-//            if (params.containsKey(BIGQUERY_CLUSTERING_FIELDS)) {
-//                List<String> clusteringFields = ImmutableList.copyOf(params.get(BIGQUERY_CLUSTERING_FIELDS).split(","));
-//                if (!clusteringFields.isEmpty()) {
-//                    bqApiTable.setClustering(new Clustering().setFields(clusteringFields));
-//                }
-//            }
-//            // TODO: Handle ExternalDataConfiguration based on parameters or StorageDescriptor
-//        }
-//        return bqApiTable;
-//    }
-//
-//    static Column bigQueryFieldSchemaToHiveColumn(TableFieldSchema field) {
-//        HiveType hiveType = mapBigQueryApiTypeToHiveType(field.getType(), "REPEATED".equals(field.getMode()), field.getFields());
-//        return new Column(field.getName(), hiveType, Optional.ofNullable(field.getDescription()), Optional.empty(), ImmutableMap.of());
-//    }
-//
-//    static TableFieldSchema hiveColumnToBigQueryFieldSchema(Column column) {
-//        TableFieldSchema fieldSchema = new TableFieldSchema().setName(column.getName());
-//        column.getComment().ifPresent(fieldSchema::setDescription);
-//
-//        String bqType;
-//        HiveType.HiveCategory category = column.getType().getHiveCategory();
-//
-//        if (category == HiveType.HiveCategory.PRIMITIVE) {
-//            bqType = mapHivePrimitiveTypeToBigQueryApiType(column.getType());
-//            // BigQuery fields are nullable by default unless specified as REQUIRED.
-//            // Hive types don't explicitly carry top-level nullability in HiveType for primitives in a simple way.
-//            // Trino types do. Assuming NULLABLE as a safe default.
-//            fieldSchema.setMode("NULLABLE");
-//        }
-//        else if (category == HiveType.HiveCategory.LIST) {
-//            HiveType elementType = column.getType().getListElementTypeInfo()
-//                    .orElseThrow(() -> new TrinoException(HIVE_METASTORE_ERROR, "LIST type has no element type: " + column.getType()))
-//                    .toHiveType();
-//            bqType = mapHiveTypeToBigQueryApiTypeFull(elementType); // Use a full type mapper for element
-//            fieldSchema.setMode("REPEATED");
-//        }
-//        else if (category == HiveType.HiveCategory.STRUCT) {
-//            bqType = "RECORD"; // Or "STRUCT" as synonyms in BQ API string representation
-//            fieldSchema.setMode("NULLABLE");
-//            List<TableFieldSchema> subFields = column.getType().getStructFieldInfos().stream()
-//                    .map(structField -> hiveColumnToBigQueryFieldSchema(new Column(structField.getFieldName(), structField.getFieldHiveType(), structField.getFieldComment())))
-//                    .collect(Collectors.toList());
-//            fieldSchema.setFields(subFields);
-//        }
-//        else {
-//            throw new UnsupportedOperationException("Unsupported Hive type category for BigQuery conversion: " + category + " for column " + column.getName());
-//        }
-//        fieldSchema.setType(bqType);
-//        return fieldSchema;
-//    }
-//
-//    private static String mapHiveTypeToBigQueryApiTypeFull(HiveType hiveType) {
-//        // This dispatches to the correct mapper based on category
-//        if (hiveType.getHiveCategory() == HiveType.HiveCategory.PRIMITIVE) {
-//            return mapHivePrimitiveTypeToBigQueryApiType(hiveType);
-//        }
-//        if (hiveType.getHiveCategory() == HiveType.HiveCategory.LIST) {
-//            // BQ type for ARRAY is the type of its element, with mode REPEATED
-//            return mapHiveTypeToBigQueryApiTypeFull(hiveType.getListElementTypeInfo().get().toHiveType());
-//        }
-//        if (hiveType.getHiveCategory() == HiveType.HiveCategory.STRUCT) {
-//            return "RECORD"; // or "STRUCT"
-//        }
-//        // MAP and UNION not directly supported by BigQuery native types in this simple mapping
-//        throw new UnsupportedOperationException("Cannot map HiveType " + hiveType + " to a singular BigQuery API type string for non-primitive elements directly.");
-//    }
-//
-//    static HiveType mapBigQueryApiTypeToHiveType(String bqApiType, boolean isRepeated, List<TableFieldSchema> subFields) {
-//        HiveType singleType;
-//        if (bqApiType == null) throw new IllegalArgumentException("BigQuery API type string cannot be null");
-//        switch (bqApiType.toUpperCase()) {
-//            case "STRING": case "GEOGRAPHY": case "JSON": singleType = HiveType.HIVE_STRING; break;
-//            case "INTEGER": case "INT64": singleType = HiveType.HIVE_LONG; break;
-//            case "FLOAT": case "FLOAT64": singleType = HiveType.HIVE_DOUBLE; break;
-//            case "BOOLEAN": case "BOOL": singleType = HiveType.HIVE_BOOLEAN; break;
-//            case "BYTES": singleType = HiveType.HIVE_BINARY; break;
-//            case "DATE": singleType = HiveType.HIVE_DATE; break;
-//            case "TIMESTAMP": singleType = HiveType.HIVE_TIMESTAMP; break;
-//            case "DATETIME": singleType = HiveType.HIVE_TIMESTAMP; break;
-//            case "NUMERIC": singleType = HiveType.HIVE_DECIMAL; break;
-//            case "BIGNUMERIC": singleType = HiveType.HIVE_DECIMAL; break;
-//            case "TIME": singleType = HiveType.HIVE_STRING; break;
-//            case "RECORD": case "STRUCT":
-//                if (subFields == null) { // An empty struct is possible, but subFields would be an empty list not null
-//                    throw new IllegalArgumentException("STRUCT/RECORD type from BigQuery must have sub-fields list (can be empty).");
-//                }
-//                List<String> fieldNames = subFields.stream().map(TableFieldSchema::getName).collect(Collectors.toList());
-//                List<HiveType> fieldTypes = subFields.stream()
-//                        .map(sf -> mapBigQueryApiTypeToHiveType(sf.getType(), "REPEATED".equals(sf.getMode()), sf.getFields()))
-//                        .collect(Collectors.toList());
-//                singleType = HiveType.createStructType(fieldNames, fieldTypes);
-//                break;
-//            default: throw new UnsupportedOperationException("Unsupported BigQuery API type: " + bqApiType);
-//        }
-//        return isRepeated ? HiveType.createArrayType(singleType) : singleType;
-//    }
-//
-//    static String mapHivePrimitiveTypeToBigQueryApiType(HiveType hiveType) {
-//        String typeName = hiveType.getHiveTypeName().toLowerCase();
-//        if (typeName.equals("boolean")) return "BOOLEAN";
-//        if (typeName.equals("tinyint") || typeName.equals("smallint") || typeName.equals("int") || typeName.equals("integer") || typeName.equals("bigint")) return "INT64"; // BQ uses INT64 for all integer types
-//        if (typeName.equals("float") || typeName.equals("double")) return "FLOAT64";
-//        if (typeName.startsWith("decimal")) return "BIGNUMERIC"; // BIGNUMERIC has higher precision and range, safer default
-//        if (typeName.startsWith("varchar") || typeName.startsWith("char") || typeName.equals("string")) return "STRING";
-//        if (typeName.equals("binary")) return "BYTES";
-//        if (typeName.equals("date")) return "DATE";
-//        if (typeName.equals("timestamp")) return "TIMESTAMP";
-//        throw new UnsupportedOperationException("Unsupported Hive primitive type for BigQuery API conversion: " + typeName);
-//    }
-//
-//    static io.trino.plugin.hive.TableType mapBigQueryApiTableTypeToHiveTableType(String bqApiTableType) {
-//        if (bqApiTableType == null) return MANAGED_TABLE;
-//        switch (bqApiTableType) {
-//            case "TABLE": return MANAGED_TABLE;
-//            case "VIEW": return VIRTUAL_VIEW;
-//            case "MATERIALIZED_VIEW": return MATERIALIZED_VIEW;
-//            case "EXTERNAL": return EXTERNAL_TABLE;
-//            case "SNAPSHOT": return MANAGED_TABLE; // Treat snapshot as a regular table for Trino
-//            default:
-//                // Log warning or throw for unknown types? For now, default to MANAGED_TABLE.
-//                return MANAGED_TABLE;
-//        }
-//    }
+
+    static Table bigQueryTableToHiveTable(com.google.api.services.bigquery.model.Table bqTable, String projectIdForTableRef)
+    {
+        TableReference bqTableRef = bqTable.getTableReference();
+        if (bqTableRef == null) {
+            throw new IllegalArgumentException("BigQuery API Table must have a TableReference");
+        }
+        String actualProjectId = bqTableRef.getProjectId() != null ? bqTableRef.getProjectId() : projectIdForTableRef;
+        String datasetId = bqTableRef.getDatasetId();
+        String tableId = bqTableRef.getTableId();
+
+        TableSchema bqSchema = bqTable.getSchema();
+        List<Column> dataColumns = new ArrayList<>();
+        if (bqSchema != null && bqSchema.getFields() != null) {
+            for (TableFieldSchema field : bqSchema.getFields()) {
+                dataColumns.add(bigQueryFieldSchemaToHiveColumn(field));
+            }
+        }
+
+        ImmutableMap.Builder<String, String> tableParameters = ImmutableMap.builder();
+        tableParameters.put(BIGQUERY_TABLE_FLAG, "true");
+        Optional.ofNullable(bqTable.getDescription()).ifPresent(comment -> tableParameters.put("comment", comment));
+        if (bqTable.getType() != null) {
+            tableParameters.put(BIGQUERY_TABLE_TYPE_PARAMETER, bqTable.getType());
+        }
+
+        TimePartitioning timePartitioning = bqTable.getTimePartitioning();
+        if (timePartitioning != null) {
+            Optional.ofNullable(timePartitioning.getField()).ifPresent(field -> tableParameters.put(BIGQUERY_TIME_PARTITIONING_FIELD, field));
+            Optional.ofNullable(timePartitioning.getType()).ifPresent(type -> tableParameters.put(BIGQUERY_TIME_PARTITIONING_TYPE, type));
+        }
+        Clustering clustering = bqTable.getClustering();
+        if (clustering != null && clustering.getFields() != null && !clustering.getFields().isEmpty()) {
+            tableParameters.put(BIGQUERY_CLUSTERING_FIELDS, String.join(",", clustering.getFields()));
+        }
+
+        Table.Builder tableBuilder = Table.builder()
+                .setDatabaseName(datasetId)
+                .setTableName(tableId)
+                .setOwner(Optional.empty())
+                .setTableType(bqTable.getType())
+                .setDataColumns(dataColumns)
+                .setPartitionColumns(ImmutableList.of());
+
+        tableBuilder.withStorage(storageBuilder -> {
+            storageBuilder.setSkewed(false);
+            storageBuilder.setBucketProperty(Optional.empty());
+
+            Map<String, String> serdeParameters = new HashMap<>();
+            String serdeLib = null;
+            String inputFormat = null;
+            String outputFormat = null;
+
+            if (TableType.isBigQueryExternalTable(bqTable)) {
+                ExternalDataConfiguration externalConfig = bqTable.getExternalDataConfiguration();
+                if (externalConfig.getSourceUris() != null && !externalConfig.getSourceUris().isEmpty()) {
+                    storageBuilder.setLocation(externalConfig.getSourceUris().get(0));
+                    if (externalConfig.getSourceUris().size() > 1) {
+                        tableParameters.put("external.source.uris", String.join(",", externalConfig.getSourceUris()));
+                    }
+                }
+                else {
+                    storageBuilder.setLocation(Optional.empty());
+                }
+                String format = externalConfig.getSourceFormat();
+                if (format != null) {
+                    tableParameters.put(EXTERNAL_DATA_FORMAT, format);
+                    switch (format) {
+                        case "CSV":
+                            inputFormat = "org.apache.hadoop.mapred.TextInputFormat";
+                            outputFormat = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat";
+                            serdeLib = "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe";
+                            if (externalConfig.getCsvOptions() != null) {
+                                CsvOptions csvOptions = externalConfig.getCsvOptions();
+                                if (csvOptions.getSkipLeadingRows() != null && csvOptions.getSkipLeadingRows() > 0) {
+                                    tableParameters.put(CSV_SKIP_HEADER_LINE_COUNT, csvOptions.getSkipLeadingRows().toString());
+                                }
+                                Optional.ofNullable(csvOptions.getFieldDelimiter()).ifPresent(d -> serdeParameters.put(FIELD_DELIM, d));
+                                Optional.ofNullable(csvOptions.getQuote()).ifPresent(q -> serdeParameters.put(QUOTE_CHAR, q));
+                                Optional.ofNullable(csvOptions.getEncoding()).ifPresent(e -> serdeParameters.put(SERIALIZATION_ENCODING, e));
+                            }
+                            break;
+                        case "NEWLINE_DELIMITED_JSON":
+                            inputFormat = "org.apache.hadoop.mapred.TextInputFormat";
+                            outputFormat = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat";
+                            serdeLib = "org.apache.hive.hcatalog.data.JsonSerDe";
+                            break;
+                        case "PARQUET":
+                            inputFormat = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat";
+                            outputFormat = "org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat";
+                            serdeLib = "org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe";
+                            break;
+                        case "AVRO":
+                            inputFormat = "org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat";
+                            outputFormat = "org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat";
+                            serdeLib = "org.apache.hadoop.hive.serde2.avro.AvroSerDe";
+                            break;
+                        case "ORC":
+                            inputFormat = "org.apache.hadoop.hive.ql.io.orc.OrcInputFormat";
+                            outputFormat = "org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat";
+                            serdeLib = "org.apache.hadoop.hive.ql.io.orc.OrcSerde";
+                            break;
+                        default: // Leave format fields null for unsupported formats
+                            break;
+                    }
+                }
+                if (externalConfig.getCompression() != null && !"NONE".equals(externalConfig.getCompression())) {
+                    tableParameters.put(EXTERNAL_DATA_COMPRESSION, externalConfig.getCompression());
+                }
+            }
+            else if (TableType.isBigQueryManagedIcebergTable(bqTable)) {
+                serdeLib = "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe";
+                inputFormat = "org.apache.hadoop.mapred.TextInputFormat";
+                outputFormat = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat";
+                storageBuilder.setLocation(bqTable.getBiglakeConfiguration().getStorageUri());
+                //tableParameters.put("table_type", "ICEBERG");
+            }
+            storageBuilder.setStorageFormat(StorageFormat.createNullable(serdeLib, inputFormat, outputFormat));
+            storageBuilder.setSerdeParameters(serdeParameters);
+        });
+
+        tableBuilder.setParameters(tableParameters.build());
+
+        if (bqTable.getView() != null) {
+            tableBuilder.setViewOriginalText(Optional.ofNullable(bqTable.getView().getQuery()));
+            tableBuilder.setViewExpandedText(Optional.ofNullable(bqTable.getView().getQuery()));
+        }
+
+        return tableBuilder.build();
+    }
+
+    static com.google.api.services.bigquery.model.Table hiveTableToBigQueryTable(Table hiveTable, String projectId)
+    {
+        com.google.api.services.bigquery.model.Table bqTable = new com.google.api.services.bigquery.model.Table();
+        bqTable.setTableReference(new TableReference()
+                .setProjectId(projectId)
+                .setDatasetId(hiveTable.getDatabaseName())
+                .setTableId(hiveTable.getTableName()));
+
+        // This call will now throw an exception if any column has an unsupported type
+        List<TableFieldSchema> bqFields = hiveTable.getDataColumns().stream()
+                .map(BigQueryMetastoreUtils::hiveColumnToBigQueryFieldSchema)
+                .collect(Collectors.toList());
+        bqTable.setSchema(new TableSchema().setFields(bqFields));
+
+        Optional.ofNullable(hiveTable.getParameters().get("comment"))
+                .ifPresent(bqTable::setDescription);
+
+        Map<String, String> labels = hiveTable.getParameters().entrySet().stream()
+                .filter(entry -> !entry.getKey().startsWith("bigquery_")
+                        && !entry.getKey().equals("comment")
+                        && !entry.getKey().equals("EXTERNAL")
+                        && !entry.getKey().startsWith("external.")
+                        && !entry.getKey().equals(CSV_SKIP_HEADER_LINE_COUNT))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        if (!labels.isEmpty()) {
+            bqTable.setLabels(labels);
+        }
+
+        if (VIRTUAL_VIEW.name().equals(hiveTable.getTableType())) {
+            String viewSql = hiveTable.getViewOriginalText()
+                    .orElseThrow(() -> new IllegalArgumentException("View SQL (viewOriginalText) is required for creating a BigQuery view"));
+            bqTable.setView(new ViewDefinition().setQuery(viewSql));
+        }
+        else if (EXTERNAL_TABLE.name().equals(hiveTable.getTableType())) {
+            ExternalDataConfiguration externalConfig = new ExternalDataConfiguration();
+            Storage storage = hiveTable.getStorage();
+            StorageFormat storageFormat = storage.getStorageFormat();
+
+            storage.getOptionalLocation().ifPresent(loc -> externalConfig.setSourceUris(ImmutableList.of(loc)));
+
+            String sourceFormat = hiveTable.getParameters().get(EXTERNAL_DATA_FORMAT);
+            if (sourceFormat != null) {
+                externalConfig.setSourceFormat(sourceFormat);
+                if ("CSV".equals(sourceFormat)) {
+                    CsvOptions csvOptions = new CsvOptions();
+                    Optional.ofNullable(storage.getSerdeParameters().get(FIELD_DELIM)).ifPresent(csvOptions::setFieldDelimiter);
+                    Optional.ofNullable(storage.getSerdeParameters().get(QUOTE_CHAR)).ifPresent(csvOptions::setQuote);
+                    Optional.ofNullable(storage.getSerdeParameters().get(SERIALIZATION_ENCODING)).ifPresent(csvOptions::setEncoding);
+                    Optional.ofNullable(hiveTable.getParameters().get(CSV_SKIP_HEADER_LINE_COUNT)).map(Long::parseLong).ifPresent(csvOptions::setSkipLeadingRows);
+                    externalConfig.setCsvOptions(csvOptions);
+                }
+            }
+
+            String compression = hiveTable.getParameters().get(EXTERNAL_DATA_COMPRESSION);
+            externalConfig.setCompression(compression != null ? compression : "NONE");
+            bqTable.setExternalDataConfiguration(externalConfig);
+        }
+        else { // Assume Managed Table
+            Map<String, String> params = hiveTable.getParameters();
+            if (params.containsKey(BIGQUERY_TIME_PARTITIONING_FIELD) && params.containsKey(BIGQUERY_TIME_PARTITIONING_TYPE)) {
+                bqTable.setTimePartitioning(new TimePartitioning()
+                        .setField(params.get(BIGQUERY_TIME_PARTITIONING_FIELD))
+                        .setType(params.get(BIGQUERY_TIME_PARTITIONING_TYPE)));
+            }
+            if (params.containsKey(BIGQUERY_CLUSTERING_FIELDS)) {
+                List<String> clusteringFields = ImmutableList.copyOf(params.get(BIGQUERY_CLUSTERING_FIELDS).split(","));
+                if (!clusteringFields.isEmpty()) {
+                    bqTable.setClustering(new Clustering().setFields(clusteringFields));
+                }
+            }
+        }
+        return bqTable;
+    }
+
+    // --- Schema/Type Conversion Helpers (Simplified) ---
+
+    static Column bigQueryFieldSchemaToHiveColumn(TableFieldSchema field)
+    {
+        // This call will now throw for unsupported types or REPEATED mode
+        HiveType hiveType = mapBigQueryTypeToHiveType(field.getType(), "REPEATED".equals(field.getMode()), field.getFields());
+        return new Column(field.getName(), hiveType, Optional.ofNullable(field.getDescription()), ImmutableMap.of());
+    }
+
+    static TableFieldSchema hiveColumnToBigQueryFieldSchema(Column column)
+    {
+        TableFieldSchema fieldSchema = new TableFieldSchema().setName(column.getName());
+        column.getComment().ifPresent(fieldSchema::setDescription);
+
+        String bqType;
+        Category category = column.getType().getCategory();
+        TypeInfo typeInfo = column.getType().getTypeInfo();
+
+        // Only handle PRIMITIVE category for basic types
+        if (category == Category.PRIMITIVE) {
+            // This call will throw for unsupported primitive types
+            bqType = mapHivePrimitiveTypeToBigQueryType(column.getType());
+            fieldSchema.setMode("NULLABLE"); // Default to NULLABLE
+        }
+        else {
+            // Throw for LIST, STRUCT, MAP, UNION etc. in this simplified version
+            throw new UnsupportedOperationException("Unsupported Hive type category for BigQuery conversion (only primitives supported): " + category + " for column " + column.getName());
+        }
+        fieldSchema.setType(bqType);
+        return fieldSchema;
+    }
+
+    // Simplified: No recursive mapping needed as complex types are unsupported
+    // private static String mapHiveTypeToBigQueryTypeFull(HiveType hiveType) {...}
+
+    // Simplified: Only basic BQ types mapped back. No LIST/STRUCT support needed here yet.
+    static HiveType mapBigQueryTypeToHiveType(String bqType, boolean isRepeated, List<TableFieldSchema> subFields)
+    {
+        // Disallow repeated mode (arrays) for now
+        if (isRepeated) {
+            throw new UnsupportedOperationException("Unsupported BigQuery type: ARRAY (repeated mode) for type " + bqType);
+        }
+        // Disallow struct/record types for now
+        if ("RECORD".equalsIgnoreCase(bqType) || "STRUCT".equalsIgnoreCase(bqType)) {
+            throw new UnsupportedOperationException("Unsupported BigQuery type: STRUCT/RECORD");
+        }
+
+        if (bqType == null) {
+            throw new IllegalArgumentException("BigQuery API type string cannot be null");
+        }
+
+        switch (bqType.toUpperCase()) {
+            // Supported types
+            case "STRING":
+                return HiveType.HIVE_STRING;
+            case "INTEGER":
+            case "INT64":
+                return HiveType.HIVE_LONG; // Map all BQ integers to LONG
+            case "BOOLEAN":
+            case "BOOL":
+                return HiveType.HIVE_BOOLEAN;
+
+            // Unsupported types for this basic version
+            case "FLOAT":
+            case "FLOAT64":
+            case "NUMERIC":
+            case "BIGNUMERIC":
+            case "BYTES":
+            case "DATE":
+            case "TIMESTAMP":
+            case "DATETIME":
+            case "TIME":
+            case "GEOGRAPHY":
+            case "JSON":
+                // RECORD/STRUCT already handled above
+            default:
+                throw new UnsupportedOperationException("Unsupported BigQuery API type: " + bqType);
+        }
+        // isRepeated logic removed as it's handled by the initial check
+    }
+
+    // Simplified: Map only basic Hive primitives to BQ types
+    static String mapHivePrimitiveTypeToBigQueryType(HiveType hiveType)
+    {
+        String typeName = hiveType.getHiveTypeName().toString().toLowerCase();
+        // Supported types
+        if (typeName.equals("boolean")) {
+            return "BOOLEAN";
+        }
+        if (typeName.equals("tinyint") || typeName.equals("smallint") || typeName.equals("int") || typeName.equals("integer") || typeName.equals("bigint")) {
+            return "INT64";
+        }
+        if (typeName.startsWith("varchar") || typeName.startsWith("char") || typeName.equals("string")) {
+            return "STRING";
+        }
+
+        // Unsupported types for this basic version
+        if (typeName.equals("float") || typeName.equals("double")) {
+            throw new UnsupportedOperationException("Unsupported Hive primitive type: " + typeName + " (float/double)");
+        }
+        if (typeName.startsWith("decimal")) {
+            throw new UnsupportedOperationException("Unsupported Hive primitive type: " + typeName + " (decimal)");
+        }
+        if (typeName.equals("binary")) {
+            throw new UnsupportedOperationException("Unsupported Hive primitive type: " + typeName + " (binary)");
+        }
+        if (typeName.equals("date")) {
+            throw new UnsupportedOperationException("Unsupported Hive primitive type: " + typeName + " (date)");
+        }
+        if (typeName.equals("timestamp")) {
+            throw new UnsupportedOperationException("Unsupported Hive primitive type: " + typeName + " (timestamp)");
+        }
+        if (typeName.equals("timestamptz") || typeName.equals("timestamp with local time zone")) {
+            throw new UnsupportedOperationException("Unsupported Hive primitive type: " + typeName + " (timestamp with local time zone)");
+        }
+
+        // Catch any other unsupported primitives
+        throw new UnsupportedOperationException("Unsupported Hive primitive type for BigQuery API conversion: " + typeName);
+    }
 }

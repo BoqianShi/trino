@@ -92,7 +92,7 @@ public class BigQueryMetastoreConfig
         return defaultWarehouseDir;
     }
 
-    @Config("hive.metastore.bigquery.default-warehouse-dir")
+    @Config("hive.metastore.bigquery.warehouse-dir")
     @ConfigDescription("Default warehouse directory for BigQuery-related operations, potentially for GCS paths if creating external tables referencing GCS.")
     public BigQueryMetastoreConfig setDefaultWarehouseDir(String defaultWarehouseDir)
     {

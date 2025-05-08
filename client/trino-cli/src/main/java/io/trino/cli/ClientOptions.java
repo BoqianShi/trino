@@ -91,7 +91,7 @@ public class ClientOptions
     private static final Splitter NAME_VALUE_SPLITTER = Splitter.on('=').limit(2);
     private static final CharMatcher PRINTABLE_ASCII = CharMatcher.inRange((char) 0x21, (char) 0x7E); // spaces are not allowed
     private static final String DEFAULT_VALUE = "(default: ${DEFAULT-VALUE})";
-    private static final String SERVER_DEFAULT = "localhost:8060";
+    private static final String SERVER_DEFAULT = "localhost:8080";
     private static final String SOURCE_DEFAULT = "trino-cli";
     static final String DEBUG_OPTION_NAME = "--debug";
 
