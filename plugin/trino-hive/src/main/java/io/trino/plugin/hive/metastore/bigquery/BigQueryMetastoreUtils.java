@@ -230,7 +230,7 @@ public final class BigQueryMetastoreUtils
             storageBuilder.setSerdeParameters(serdeParameters);
         });
 
-        tableBuilder.setParameters(tableParameters.build());
+        tableBuilder.setParameters(tableParameters.buildOrThrow());
 
         if (bqTable.getView() != null) {
             tableBuilder.setViewOriginalText(Optional.ofNullable(bqTable.getView().getQuery()));
@@ -365,7 +365,7 @@ public final class BigQueryMetastoreUtils
             throw new IllegalArgumentException("BigQuery API type string cannot be null");
         }
 
-        switch (bqType.toUpperCase()) {
+        switch (bqType) {
             // Supported types
             case "STRING":
                 return HiveType.HIVE_STRING;
@@ -398,7 +398,7 @@ public final class BigQueryMetastoreUtils
     // Simplified: Map only basic Hive primitives to BQ types
     static String mapHivePrimitiveTypeToBigQueryType(HiveType hiveType)
     {
-        String typeName = hiveType.getHiveTypeName().toString().toLowerCase();
+        String typeName = hiveType.getHiveTypeName().toString();
         // Supported types
         if (typeName.equals("boolean")) {
             return "BOOLEAN";
