@@ -17,6 +17,7 @@ import com.google.inject.Binder;
 import com.google.inject.Scopes;
 import io.airlift.configuration.AbstractConfigurationAwareModule;
 import io.trino.plugin.iceberg.catalog.TrinoCatalogFactory;
+import io.trino.plugin.iceberg.catalog.biglake.IcebergBigLakeRestCatalogConfig;
 import io.trino.plugin.iceberg.catalog.rest.IcebergRestCatalogConfig.Security;
 
 import static io.airlift.configuration.ConditionalModule.conditionalModule;
@@ -29,6 +30,7 @@ public class IcebergRestCatalogModule
     protected void setup(Binder binder)
     {
         configBinder(binder).bindConfig(IcebergRestCatalogConfig.class);
+        configBinder(binder).bindConfig(IcebergBigLakeRestCatalogConfig.class);
         install(conditionalModule(
                 IcebergRestCatalogConfig.class,
                 config -> config.getSecurity() == Security.OAUTH2,

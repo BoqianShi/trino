@@ -88,8 +88,11 @@ public class GcsStorageFactory
                     credential = GoogleCredential.fromStream(inputStream).createScoped(CredentialFactory.DEFAULT_SCOPES);
                 }
             }
+            else if (jsonGoogleCredential.isPresent()) {
+                credential = jsonGoogleCredential.get();
+            }
             else {
-                credential = jsonGoogleCredential.orElseThrow(() -> new IllegalStateException("GCS credentials not configured"));
+                credential = GoogleCredential.getApplicationDefault();
             }
             return new Storage.Builder(httpTransport, JacksonFactory.getDefaultInstance(), new RetryHttpInitializer(credential, APPLICATION_NAME))
                     .setApplicationName(APPLICATION_NAME)

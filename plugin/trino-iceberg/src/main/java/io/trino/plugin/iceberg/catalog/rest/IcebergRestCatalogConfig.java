@@ -26,6 +26,7 @@ public class IcebergRestCatalogConfig
     {
         NONE,
         OAUTH2,
+        BIGLAKE
     }
 
     public enum SessionType

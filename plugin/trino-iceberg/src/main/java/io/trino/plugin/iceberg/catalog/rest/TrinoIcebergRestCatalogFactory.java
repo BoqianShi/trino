@@ -13,6 +13,7 @@
  */
 package io.trino.plugin.iceberg.catalog.rest;
 
+import com.google.cloud.ServiceOptions;
 import com.google.common.collect.ImmutableMap;
 import com.google.errorprone.annotations.concurrent.GuardedBy;
 import com.google.inject.Inject;
@@ -22,16 +23,23 @@ import io.trino.plugin.hive.NodeVersion;
 import io.trino.plugin.iceberg.IcebergConfig;
 import io.trino.plugin.iceberg.catalog.TrinoCatalog;
 import io.trino.plugin.iceberg.catalog.TrinoCatalogFactory;
+import io.trino.plugin.iceberg.catalog.biglake.BigLakeRestClientFactory;
+import io.trino.plugin.iceberg.catalog.biglake.IcebergBigLakeRestCatalogConfig;
+import io.trino.plugin.iceberg.catalog.rest.IcebergRestCatalogConfig.Security;
 import io.trino.plugin.iceberg.catalog.rest.IcebergRestCatalogConfig.SessionType;
 import io.trino.plugin.iceberg.fileio.ForwardingFileIo;
 import io.trino.spi.security.ConnectorIdentity;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.rest.HTTPClient;
+import org.apache.iceberg.rest.RESTClient;
 import org.apache.iceberg.rest.RESTSessionCatalog;
 
 import java.net.URI;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
 
 public class TrinoIcebergRestCatalogFactory
@@ -43,8 +51,11 @@ public class TrinoIcebergRestCatalogFactory
     private final URI serverUri;
     private final Optional<String> warehouse;
     private final SessionType sessionType;
+    private final Security securityType;
     private final SecurityProperties securityProperties;
-    private final boolean uniqueTableLocation;
+    private final String bigLakeProjectId;
+    private final boolean restMetricReportingEnabled = false;
+    private boolean uniqueTableLocation;
 
     @GuardedBy("this")
     private RESTSessionCatalog icebergCatalog;
@@ -54,6 +65,7 @@ public class TrinoIcebergRestCatalogFactory
             TrinoFileSystemFactory fileSystemFactory,
             CatalogName catalogName,
             IcebergRestCatalogConfig restConfig,
+            IcebergBigLakeRestCatalogConfig bigLakeConfig,
             SecurityProperties securityProperties,
             IcebergConfig icebergConfig,
             NodeVersion nodeVersion)
@@ -65,9 +77,16 @@ public class TrinoIcebergRestCatalogFactory
         this.serverUri = restConfig.getBaseUri();
         this.warehouse = restConfig.getWarehouse();
         this.sessionType = restConfig.getSessionType();
+        this.securityType = restConfig.getSecurity();
         this.securityProperties = requireNonNull(securityProperties, "securityProperties is null");
         requireNonNull(icebergConfig, "icebergConfig is null");
         this.uniqueTableLocation = icebergConfig.isUniqueTableLocation();
+        this.bigLakeProjectId = Optional.ofNullable(bigLakeConfig.getProjectId()).orElse(ServiceOptions.getDefaultProjectId());
+    }
+
+    static RESTClient defaultHTTPClient(Map<String, String> config)
+    {
+        return HTTPClient.builder(config).uri(config.get(CatalogProperties.URI)).build();
     }
 
     @Override
@@ -78,22 +97,41 @@ public class TrinoIcebergRestCatalogFactory
         if (icebergCatalog == null) {
             ImmutableMap.Builder<String, String> properties = ImmutableMap.builder();
             properties.put(CatalogProperties.URI, serverUri.toString());
-            warehouse.ifPresent(location -> properties.put(CatalogProperties.WAREHOUSE_LOCATION, location));
             properties.put("trino-version", trinoVersion);
             properties.putAll(securityProperties.get());
+            if (securityType == Security.BIGLAKE) {
+                checkArgument(warehouse.isPresent(), "Warehouse location (iceberg.rest-catalog.warehouse) must be set when using BigLake REST API.");
+                properties.put(CatalogProperties.WAREHOUSE_LOCATION, warehouse.get());
+                properties.put("biglake-projectId", bigLakeProjectId);
+                properties.put("rest-metrics-reporting-enabled", String.valueOf(restMetricReportingEnabled));
+                this.uniqueTableLocation = false;
+            }
+            else {
+                warehouse.ifPresent(location -> properties.put(CatalogProperties.WAREHOUSE_LOCATION, location));
+            }
+            ImmutableMap<String, String> propertiesMap = properties.buildOrThrow();
             RESTSessionCatalog icebergCatalogInstance = new RESTSessionCatalog(
-                    config -> HTTPClient.builder(config).uri(config.get(CatalogProperties.URI)).build(),
+                    restClientFactory(propertiesMap).orElse(TrinoIcebergRestCatalogFactory::defaultHTTPClient),
                     (context, config) -> {
                         ConnectorIdentity currentIdentity = (context.wrappedIdentity() != null)
                                 ? ((ConnectorIdentity) context.wrappedIdentity())
                                 : ConnectorIdentity.ofUser("fake");
                         return new ForwardingFileIo(fileSystemFactory.create(currentIdentity));
                     });
-            icebergCatalogInstance.initialize(catalogName.toString(), properties.buildOrThrow());
+            icebergCatalogInstance.initialize(catalogName.toString(), propertiesMap);
 
             icebergCatalog = icebergCatalogInstance;
         }
 
         return new TrinoRestCatalog(icebergCatalog, catalogName, sessionType, trinoVersion, uniqueTableLocation);
+    }
+
+    Optional<Function<Map<String, String>, RESTClient>> restClientFactory(Map<String, String> config)
+    {
+        if (securityType == Security.BIGLAKE) {
+            BigLakeRestClientFactory bigLakeRESTClientFactory = new BigLakeRestClientFactory();
+            return Optional.of(bigLakeRESTClientFactory);
+        }
+        return Optional.empty();
     }
 }
