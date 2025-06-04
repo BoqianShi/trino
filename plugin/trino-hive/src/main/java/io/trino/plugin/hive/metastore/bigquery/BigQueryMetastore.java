@@ -294,26 +294,26 @@ public class BigQueryMetastore
     @Override
     public void createTable(Table table, PrincipalPrivileges principalPrivileges)
     {
-//        if (!table.getPartitionColumns().isEmpty()) {
-//            throw new TrinoException(HIVE_METASTORE_ERROR, "Creating Hive-style partitioned tables in BigQuery is not supported by this metastore.");
-//        }
-//        try {
-//            com.google.api.services.bigquery.model.Table bqTable =
-//                    BigQueryMetastoreUtils.hiveTableToBigQueryTable(table, projectId);
-//            bigQueryClient.tables().insert(projectId, table.getDatabaseName(), bqTable).execute();
-//        }
-//        catch (GoogleJsonResponseException e) {
-//            if (e.getStatusCode() == 409) {
-//                throw new TrinoException(HIVE_METASTORE_ERROR, "BigQuery table already exists: " + table.getSchemaTableName() + " - " + e.getDetails().getMessage(), e);
-//            }
-//            if (e.getStatusCode() == 404) {
-//                throw new SchemaNotFoundException(table.getDatabaseName(), "Dataset not found when creating table: " + e.getDetails().getMessage());
-//            }
-//            throw new TrinoException(HIVE_METASTORE_ERROR, "Failed to create BigQuery table: " + table.getSchemaTableName() + " - " + e.getDetails().getMessage(), e);
-//        }
-//        catch (IOException e) {
-//            throw new TrinoException(HIVE_METASTORE_ERROR, "Failed to create BigQuery table (IO): " + table.getSchemaTableName(), e);
-//        }
+        if (!table.getPartitionColumns().isEmpty()) {
+            throw new TrinoException(HIVE_METASTORE_ERROR, "Creating Hive-style partitioned tables in BigQuery is not supported by this metastore.");
+        }
+        try {
+            com.google.api.services.bigquery.model.Table bqTable =
+                    BigQueryMetastoreUtils.hiveTableToBigQueryTable(table, projectId);
+            bigQueryClient.tables().insert(projectId, table.getDatabaseName(), bqTable).execute();
+        }
+        catch (GoogleJsonResponseException e) {
+            if (e.getStatusCode() == 409) {
+                throw new TrinoException(HIVE_METASTORE_ERROR, "BigQuery table already exists: " + table.getSchemaTableName() + " - " + e.getDetails().getMessage(), e);
+            }
+            if (e.getStatusCode() == 404) {
+                throw new SchemaNotFoundException(table.getDatabaseName(), "Dataset not found when creating table: " + e.getDetails().getMessage());
+            }
+            throw new TrinoException(HIVE_METASTORE_ERROR, "Failed to create BigQuery table: " + table.getSchemaTableName() + " - " + e.getDetails().getMessage(), e);
+        }
+        catch (IOException e) {
+            throw new TrinoException(HIVE_METASTORE_ERROR, "Failed to create BigQuery table (IO): " + table.getSchemaTableName(), e);
+        }
     }
 
     @Override

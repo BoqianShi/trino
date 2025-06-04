@@ -165,10 +165,17 @@ public final class BigQueryMetastoreUtils
             if (TableType.isBigQueryExternalTable(bqTable)) {
                 ExternalDataConfiguration externalConfig = bqTable.getExternalDataConfiguration();
                 if (externalConfig.getSourceUris() != null && !externalConfig.getSourceUris().isEmpty()) {
-                    storageBuilder.setLocation(externalConfig.getSourceUris().get(0));
-                    if (externalConfig.getSourceUris().size() > 1) {
-                        tableParameters.put("external.source.uris", String.join(",", externalConfig.getSourceUris()));
+                    String firstUri = externalConfig.getSourceUris().get(0);
+                    String directoryUri = firstUri; // Default to the URI itself
+
+                    if (!firstUri.endsWith("/")) {
+                        int lastSlash = firstUri.lastIndexOf('/');
+                        int schemeSeparatorIndex = firstUri.indexOf("://");
+                        if (schemeSeparatorIndex != -1 && lastSlash > (schemeSeparatorIndex + 2)) {
+                            directoryUri = firstUri.substring(0, lastSlash + 1); // Include trailing slash for directory
+                        }
                     }
+                    storageBuilder.setLocation(directoryUri);
                 }
                 else {
                     storageBuilder.setLocation(Optional.empty());
@@ -224,7 +231,7 @@ public final class BigQueryMetastoreUtils
                 inputFormat = "org.apache.hadoop.mapred.TextInputFormat";
                 outputFormat = "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat";
                 storageBuilder.setLocation(bqTable.getBiglakeConfiguration().getStorageUri());
-                //tableParameters.put("table_type", "ICEBERG");
+                tableParameters.put("table_type", "ICEBERG");
             }
             storageBuilder.setStorageFormat(StorageFormat.createNullable(serdeLib, inputFormat, outputFormat));
             storageBuilder.setSerdeParameters(serdeParameters);
@@ -248,7 +255,6 @@ public final class BigQueryMetastoreUtils
                 .setDatasetId(hiveTable.getDatabaseName())
                 .setTableId(hiveTable.getTableName()));
 
-        // This call will now throw an exception if any column has an unsupported type
         List<TableFieldSchema> bqFields = hiveTable.getDataColumns().stream()
                 .map(BigQueryMetastoreUtils::hiveColumnToBigQueryFieldSchema)
                 .collect(Collectors.toList());
@@ -257,16 +263,16 @@ public final class BigQueryMetastoreUtils
         Optional.ofNullable(hiveTable.getParameters().get("comment"))
                 .ifPresent(bqTable::setDescription);
 
-        Map<String, String> labels = hiveTable.getParameters().entrySet().stream()
-                .filter(entry -> !entry.getKey().startsWith("bigquery_")
-                        && !entry.getKey().equals("comment")
-                        && !entry.getKey().equals("EXTERNAL")
-                        && !entry.getKey().startsWith("external.")
-                        && !entry.getKey().equals(CSV_SKIP_HEADER_LINE_COUNT))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-        if (!labels.isEmpty()) {
-            bqTable.setLabels(labels);
-        }
+//        Map<String, String> labels = hiveTable.getParameters().entrySet().stream()
+//                .filter(entry -> !entry.getKey().startsWith("bigquery_")
+//                        && !entry.getKey().equals("comment")
+//                        && !entry.getKey().equals("EXTERNAL")
+//                        && !entry.getKey().startsWith("external.")
+//                        && !entry.getKey().equals(CSV_SKIP_HEADER_LINE_COUNT))
+//                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+//        if (!labels.isEmpty()) {
+//            bqTable.setLabels(labels);
+//        }
 
         if (VIRTUAL_VIEW.name().equals(hiveTable.getTableType())) {
             String viewSql = hiveTable.getViewOriginalText()
