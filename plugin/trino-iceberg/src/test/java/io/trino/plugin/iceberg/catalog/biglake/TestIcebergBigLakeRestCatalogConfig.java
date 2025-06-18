@@ -40,18 +40,21 @@ public class TestIcebergBigLakeRestCatalogConfig
     @Test
     public void testDefaults()
     {
-        // This test is now simpler and only tests the BigLake config
         assertRecordedDefaults(recordDefaults(IcebergBigLakeRestCatalogConfig.class)
-                .setProjectId(null));
+                .setProjectId(null)
+                .setAuthType(null));
     }
 
     @Test
     public void testExplicitPropertyMappings()
     {
-        Map<String, String> properties = ImmutableMap.of("iceberg.rest-catalog.biglake.project-id", "test-project-id");
+        Map<String, String> properties = ImmutableMap.of(
+                "iceberg.rest-catalog.biglake.project-id", "test-project-id",
+                "iceberg.rest-catalog.rest.auth.type", "test-auth-type");
 
         IcebergBigLakeRestCatalogConfig expected = new IcebergBigLakeRestCatalogConfig()
-                .setProjectId("test-project-id");
+                .setProjectId("test-project-id")
+                .setAuthType("test-auth-type");
 
         assertFullMapping(properties, expected);
     }

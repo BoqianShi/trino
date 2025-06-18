@@ -90,7 +90,7 @@ public class TestIcebergBigLakeRESTCatalog
     {
         Map<String, String> properties = new HashMap<>();
         properties.put("iceberg.catalog.type", "rest");
-        properties.put("iceberg.rest-catalog.security", "BIGLAKE");
+        properties.put("iceberg.rest-catalog.rest.auth.type", "org.apache.iceberg.gcp.auth.GoogleAuthManager");
         properties.put("iceberg.rest-catalog.biglake.project-id", gcpProjectId);
         properties.put("iceberg.rest-catalog.uri", biglakeRestUri);
         properties.put("iceberg.rest-catalog.warehouse", gcsWarehouseUri);

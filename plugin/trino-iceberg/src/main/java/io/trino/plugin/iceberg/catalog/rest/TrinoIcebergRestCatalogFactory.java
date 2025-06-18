@@ -36,6 +36,7 @@ import org.apache.iceberg.rest.RESTSessionCatalog;
 
 import java.net.URI;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -45,6 +46,7 @@ import static java.util.Objects.requireNonNull;
 public class TrinoIcebergRestCatalogFactory
         implements TrinoCatalogFactory
 {
+    private static final String GOOGLE_AUTH_MANAGER = "org.apache.iceberg.gcp.auth.GoogleAuthManager";
     private final TrinoFileSystemFactory fileSystemFactory;
     private final CatalogName catalogName;
     private final String trinoVersion;
@@ -54,9 +56,9 @@ public class TrinoIcebergRestCatalogFactory
     private final Security securityType;
     private final SecurityProperties securityProperties;
     private final String bigLakeProjectId;
+    private final String authType;
     private final boolean restMetricReportingEnabled = false;
     private boolean uniqueTableLocation;
-
     @GuardedBy("this")
     private RESTSessionCatalog icebergCatalog;
 
@@ -81,6 +83,7 @@ public class TrinoIcebergRestCatalogFactory
         this.securityProperties = requireNonNull(securityProperties, "securityProperties is null");
         requireNonNull(icebergConfig, "icebergConfig is null");
         this.uniqueTableLocation = icebergConfig.isUniqueTableLocation();
+        this.authType = bigLakeConfig.getAuthType();
         this.bigLakeProjectId = Optional.ofNullable(bigLakeConfig.getProjectId()).orElse(ServiceOptions.getDefaultProjectId());
     }
 
@@ -99,7 +102,7 @@ public class TrinoIcebergRestCatalogFactory
             properties.put(CatalogProperties.URI, serverUri.toString());
             properties.put("trino-version", trinoVersion);
             properties.putAll(securityProperties.get());
-            if (securityType == Security.BIGLAKE) {
+            if (Objects.equals(authType, GOOGLE_AUTH_MANAGER)) {
                 checkArgument(warehouse.isPresent(), "Warehouse location (iceberg.rest-catalog.warehouse) must be set when using BigLake REST API.");
                 properties.put(CatalogProperties.WAREHOUSE_LOCATION, warehouse.get());
                 properties.put("biglake-projectId", bigLakeProjectId);
@@ -128,7 +131,7 @@ public class TrinoIcebergRestCatalogFactory
 
     Optional<Function<Map<String, String>, RESTClient>> restClientFactory(Map<String, String> config)
     {
-        if (securityType == Security.BIGLAKE) {
+        if (Objects.equals(authType, GOOGLE_AUTH_MANAGER)) {
             BigLakeRestClientFactory bigLakeRESTClientFactory = new BigLakeRestClientFactory();
             return Optional.of(bigLakeRESTClientFactory);
         }

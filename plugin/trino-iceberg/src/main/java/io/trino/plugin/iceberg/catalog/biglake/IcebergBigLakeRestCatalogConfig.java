@@ -19,6 +19,7 @@ import io.airlift.configuration.ConfigDescription;
 public class IcebergBigLakeRestCatalogConfig
 {
     private String projectId;
+    private String authType;
 
     public String getProjectId()
     {
@@ -30,6 +31,19 @@ public class IcebergBigLakeRestCatalogConfig
     public IcebergBigLakeRestCatalogConfig setProjectId(String projectId)
     {
         this.projectId = projectId;
+        return this;
+    }
+
+    public String getAuthType()
+    {
+        return authType;
+    }
+
+    @Config("iceberg.rest-catalog.rest.auth.type")
+    @ConfigDescription("Auth manager class for the rest-catalog")
+    public IcebergBigLakeRestCatalogConfig setAuthType(String authType)
+    {
+        this.authType = authType;
         return this;
     }
 }
