@@ -16,6 +16,8 @@ package io.trino.hdfs.gcs;
 import com.google.cloud.hadoop.util.AccessTokenProvider;
 import org.apache.hadoop.conf.Configuration;
 
+import java.time.Instant;
+
 import static com.google.common.base.Strings.nullToEmpty;
 import static java.util.concurrent.TimeUnit.HOURS;
 
@@ -29,21 +31,21 @@ public class GcsAccessTokenProvider
     @Override
     public AccessToken getAccessToken()
     {
-        return new AccessToken(nullToEmpty(config.get(GCS_ACCESS_TOKEN_CONF)), EXPIRATION_TIME_MILLISECONDS);
+        return new AccessToken(nullToEmpty(config.get(GCS_ACCESS_TOKEN_CONF)), Instant.ofEpochMilli(EXPIRATION_TIME_MILLISECONDS));
     }
 
     @Override
     public void refresh() {}
 
     @Override
-    public void setConf(Configuration configuration)
-    {
-        this.config = configuration;
-    }
-
-    @Override
     public Configuration getConf()
     {
         return config;
+    }
+
+    @Override
+    public void setConf(Configuration configuration)
+    {
+        this.config = configuration;
     }
 }

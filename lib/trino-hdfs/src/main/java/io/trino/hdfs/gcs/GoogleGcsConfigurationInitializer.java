@@ -29,9 +29,10 @@ import java.util.EnumSet;
 import java.util.Optional;
 
 import static com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystemConfiguration.GCS_CONFIG_PREFIX;
-import static com.google.cloud.hadoop.fs.gcs.HadoopCredentialConfiguration.ACCESS_TOKEN_PROVIDER_IMPL_SUFFIX;
-import static com.google.cloud.hadoop.fs.gcs.HadoopCredentialConfiguration.ENABLE_SERVICE_ACCOUNTS_SUFFIX;
-import static com.google.cloud.hadoop.fs.gcs.HadoopCredentialConfiguration.SERVICE_ACCOUNT_JSON_KEYFILE_SUFFIX;
+import static com.google.cloud.hadoop.fs.gcs.HadoopCredentialsConfiguration.ACCESS_TOKEN_PROVIDER_SUFFIX;
+import static com.google.cloud.hadoop.fs.gcs.HadoopCredentialsConfiguration.AUTHENTICATION_TYPE_SUFFIX;
+import static com.google.cloud.hadoop.fs.gcs.HadoopCredentialsConfiguration.AuthenticationType;
+import static com.google.cloud.hadoop.fs.gcs.HadoopCredentialsConfiguration.SERVICE_ACCOUNT_JSON_KEYFILE_SUFFIX;
 import static java.nio.file.attribute.PosixFilePermission.OWNER_READ;
 import static java.nio.file.attribute.PosixFilePermission.OWNER_WRITE;
 
@@ -72,13 +73,19 @@ public class GoogleGcsConfigurationInitializer
 
         if (useGcsAccessToken) {
             // use oauth token to authenticate with Google Cloud Storage
-            config.setBoolean(GCS_CONFIG_PREFIX + ENABLE_SERVICE_ACCOUNTS_SUFFIX.getKey(), false);
-            config.setClass(GCS_CONFIG_PREFIX + ACCESS_TOKEN_PROVIDER_IMPL_SUFFIX.getKey(), GcsAccessTokenProvider.class, AccessTokenProvider.class);
+            config.set(GCS_CONFIG_PREFIX + AUTHENTICATION_TYPE_SUFFIX.getKey(),
+                    AuthenticationType.ACCESS_TOKEN_PROVIDER.name());
+            config.setClass(GCS_CONFIG_PREFIX + ACCESS_TOKEN_PROVIDER_SUFFIX.getKey(), GcsAccessTokenProvider.class, AccessTokenProvider.class);
         }
         else if (jsonKeyFilePath != null) {
             // use service account key file
-            config.setBoolean(GCS_CONFIG_PREFIX + ENABLE_SERVICE_ACCOUNTS_SUFFIX.getKey(), true);
+            config.set(GCS_CONFIG_PREFIX + AUTHENTICATION_TYPE_SUFFIX.getKey(),
+                    AuthenticationType.SERVICE_ACCOUNT_JSON_KEYFILE.name());
             config.set(GCS_CONFIG_PREFIX + SERVICE_ACCOUNT_JSON_KEYFILE_SUFFIX.getKey(), jsonKeyFilePath);
+        }
+        else {
+            config.set(GCS_CONFIG_PREFIX + AUTHENTICATION_TYPE_SUFFIX.getKey(),
+                    AuthenticationType.APPLICATION_DEFAULT.name());
         }
     }
 }
